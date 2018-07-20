@@ -93,6 +93,8 @@ def attr_copy(item, new):
 
 
 # item =file to be merged, new = final file
+# pass both len argument as 0 if new file is empty
+# ( it never get used for copying into empty file)
 def copy(item, item_len, new, new_len):
     """Fuction to copy input file data into output file."""
 
@@ -161,8 +163,6 @@ def close(i,j):
         if not (abs(prmtr_values[k][i]-prmtr_values[k][j]) < max(prmtr_values[k][i]*spr[k],prmtr_values[k][j]*spr[k]) ):
             return False
     return True
-
-
 
 
 def group():
