@@ -18,15 +18,16 @@ prmtr_values = []
 use = []
 filelist = []
 
-def dataset_copy(item, new):
-    """Fuction to copy dataset from input files into output file."""
+def dataset_copy(item, item_len, new, new_len):
+    """Fuction to copy dataset from item into new."""
     # dataset exists, resize and modify
+
     if item.name in new:
 
         # Case 1: 1 data point dataset for mean values
         if len(item.shape) == 1 and item.len() == 1:
-            # need to take mean later, will be done in mean()
-            new[item.name][0] = new[item.name][0] + item.value
+            # need to take weighted average here
+            new[item.name][0] = (new[item.name][0]*new_len + item.value*item_len)/(new_len+item_len)
 
         # Case 2: 1d /2d array
         else:
@@ -35,6 +36,7 @@ def dataset_copy(item, new):
             new[item.name][-item.shape[0]:] = item.value
 
     # dataset doesn't exist, create dataset and modify
+    # this might never be needed if we only update existing files
     else:
 
         # Case 1: 1 data point dataset like T2FractionMean
@@ -65,11 +67,10 @@ def attr_copy(item, new):
             # different treatment for attributes of dataset like T2FractionMean
             if len(item.shape) == 1 and item.len() == 1:
                 # Error attribute for mean values added as sqrt(x^2+y^2)
-                # (sqrt taken after all files copied in mean() routine)
                 # Unit attribute is not appended
                 if name == 'Error':
-                    attr_data = np.add(new[item.name].attrs.get(name),
-                                       item.attrs.get(name)**(2))
+                    attr_data = np.add(new[item.name].attrs.get(name)**(2),
+                                       item.attrs.get(name)**(2))**(1/2) 
                     new[item.name].attrs.__setitem__(name, attr_data)
             else:
                 attr_data = np.append(new[item.name].attrs.get(name),
@@ -77,12 +78,13 @@ def attr_copy(item, new):
                 new[item.name].attrs.__setitem__(name, attr_data)
 
         # create new.attr and add data
+        # this might never be needed if we only update existing files
         else:
             if len(item.shape) == 1 and item.len() == 1:
                 # Error attribute for mean values
                 if name == 'Error':
                     new[item.name].attrs.__setitem__(name,
-                                                     item.attrs.get(name)**(2))
+                                                     item.attrs.get(name))
                 else:
                     new[item.name].attrs.__setitem__(name,
                                                      item.attrs.get(name))
@@ -91,15 +93,16 @@ def attr_copy(item, new):
 
 
 # item =file to be merged, new = final file
-def copy(item, new):
+def copy(item, item_len, new, new_len):
     """Fuction to copy input file data into output file."""
+
     # if item is group
     if isinstance(item, h5py.Group):
         new.require_group(item.name)
 
     # if item is dataset
     if isinstance(item, h5py.Dataset):
-        dataset_copy(item, new)
+        dataset_copy(item, item_len, new, new_len)
 
     # copy item attribute(s)
     attr_copy(item, new)
@@ -107,34 +110,21 @@ def copy(item, new):
     # continue towards sub-groups/datasets, if item is group
     if isinstance(item, h5py.Group):
         for name in item:
-            copy(item[name], new)
+            copy(item[name], item_len, new, new_len)
 
 
-def mean(new, value):
+def show(new):
     """Use this function to.
 
-    1) print name of mean value datasets ( when value=0 )
-    2) get average value for mean value dataset
-    3) take sqrt of error attribute for mean value dataset.
+    print name of mean value datasets
     """
     if isinstance(new, h5py.Group):
         for name in new:
-            mean(new[name], value)
+            show(new[name])
 
     if isinstance(new, h5py.Dataset):
         if len(new.shape) == 1 and new.len() == 1:
-            if value == 0:
                 logging.info(new.name)
-            if value > 0:
-                new[0] = new[0]/value
-
-    if value > 0:
-        for name in new.attrs:
-            if len(new.shape) == 1 and new.len() == 1:
-                # sqrt taken for Error attribute
-                if name == 'Error':
-                    attr_data = new.attrs.get(name)**(1/2)
-                    new.attrs.__setitem__(name, attr_data)
 
 
 def init():
@@ -152,7 +142,7 @@ def init():
     else:
         first_file = h5py.File(input_files[0], "r")
         logging.info("Available datasets of mean values in input :")
-        mean(first_file, 0)
+        show(first_file)
         print("\n")
         first_file.close()
 
@@ -194,8 +184,9 @@ def group():
                     # found one pair that can be added
                     file1=h5py.File(filelist[i])
                     file2=h5py.File(filelist[j])
-                    copy(file2,file1)
-                    mean(file1,2)
+                    len1 = file1["RunSummary/Counts"].len()
+                    len2 = file2["RunSummary/Counts"].len()
+                    copy(file2,len2,file1,len1)
                     del filelist[j]
                     for k in range(len(prmtr_names)):
                        prmtr_values[k][i]=float(np.mean(file1[prmtr_names[k]]))
