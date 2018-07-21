@@ -5,18 +5,20 @@ them to produce one output file,based on user input condition(s)
 for the KATRIN experiment data.
 """
 
-import numpy as np
+import os
 import logging
 import configparser
-import h5py
 import glob
 from itertools import product
+import h5py
+import numpy as np
 
 prmtr_names = []
 spr = []
 prmtr_values = []
 use = []
 filelist = []
+
 
 def dataset_copy(item, item_len, new, new_len):
     """Fuction to copy dataset from item into new."""
@@ -27,7 +29,8 @@ def dataset_copy(item, item_len, new, new_len):
         # Case 1: 1 data point dataset for mean values
         if len(item.shape) == 1 and item.len() == 1:
             # need to take weighted average here
-            new[item.name][0] = (new[item.name][0]*new_len + item.value*item_len)/(new_len+item_len)
+            new[item.name][0] = (new[item.name][0]*new_len +
+                                 item.value*item_len)/(new_len+item_len)
 
         # Case 2: 1d /2d array
         else:
@@ -97,7 +100,6 @@ def attr_copy(item, new):
 # ( it never get used for copying into empty file)
 def copy(item, item_len, new, new_len):
     """Fuction to copy input file data into output file."""
-
     # if item is group
     if isinstance(item, h5py.Group):
         new.require_group(item.name)
@@ -126,7 +128,7 @@ def show(new):
 
     if isinstance(new, h5py.Dataset):
         if len(new.shape) == 1 and new.len() == 1:
-                logging.info(new.name)
+            logging.info(new.name)
 
 
 def init():
@@ -157,46 +159,48 @@ def init():
             total_prmtr += 1
     return total_prmtr
 
-def close(i,j):
-    """Function to check if input files are close enough for merge"""
+
+def close(i, j):
+    """Check if input files are close enough for merge."""
     for k in range(len(prmtr_names)):
-        if not (abs(prmtr_values[k][i]-prmtr_values[k][j]) < max(prmtr_values[k][i]*spr[k],prmtr_values[k][j]*spr[k]) ):
+        if not (abs(prmtr_values[k][i]-prmtr_values[k][j]) <
+                max(prmtr_values[k][i]*spr[k], prmtr_values[k][j]*spr[k])):
             return False
     return True
 
 
 def group():
-    """Function to group files based on input"""
-
+    """Group files based on input."""
     # try to add files using bottoms up
     # keep trying until no more merge can happen
-    turn=0
+    count = 0
     old_length = len(filelist)
     new_length = old_length - 1
-    while(new_length < old_length):
-        old_length=len(filelist)
-        for i, j in product(range(len(filelist)),range(len(filelist))):
-            turn +=1
+    while new_length < old_length:
+        old_length = len(filelist)
+        for i, j in product(range(len(filelist)), range(len(filelist))):
+            count += 1
             if not i == j:
-                if close(i,j):
+                if close(i, j):
                     # found one pair that can be merged
-                    file1=h5py.File(filelist[i])
-                    file2=h5py.File(filelist[j])
+                    file1 = h5py.File(filelist[i])
+                    file2 = h5py.File(filelist[j])
                     len1 = file1["RunSummary/Counts"].len()
                     len2 = file2["RunSummary/Counts"].len()
-                    copy(file2,len2,file1,len1)
+                    copy(file2, len2, file1, len1)
                     del filelist[j]
                     for k in range(len(prmtr_names)):
-                       prmtr_values[k][i]=float(np.mean(file1[prmtr_names[k]]))
-                       del prmtr_values[k][j]
+                        prmtr_values[k][i] = float(np.mean(file1[prmtr_names[k]]))
+                        del prmtr_values[k][j]
                     new_length = len(filelist)
                     # we modified list we were iterating over, break loop
                     break
         new_length = len(filelist)
-    logging.info("number of steps %d",turn)
+    logging.info("number of steps %d", count)
     print("final files list", filelist)
-
-
+    # for now just rename files in final list
+    for file in filelist:
+        os.rename(file, "new_"+file)
 
 
 # set logger level ( if needed diff from default )
@@ -232,8 +236,8 @@ if __name__ == "__main__":
                 counter += 1
                 prmtr_values.append(var)
 
-            # group files based on input 
+            # group files based on input
             group()
         else:
             logging.error("No parameter found in input.cfg, "
-                            "will not merge any file")
+                          "will not merge any file")
