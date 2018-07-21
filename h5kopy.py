@@ -70,7 +70,7 @@ def attr_copy(item, new):
                 # Unit attribute is not appended
                 if name == 'Error':
                     attr_data = np.add(new[item.name].attrs.get(name)**(2),
-                                       item.attrs.get(name)**(2))**(1/2) 
+                                       item.attrs.get(name)**(2))**(1/2)
                     new[item.name].attrs.__setitem__(name, attr_data)
             else:
                 attr_data = np.append(new[item.name].attrs.get(name),
@@ -167,8 +167,6 @@ def close(i,j):
 
 def group():
     """Function to group files based on input"""
-    print(filelist)
-    print(prmtr_values)
 
     # try to add files using bottoms up
     # keep trying until no more merge can happen
@@ -181,7 +179,7 @@ def group():
             turn +=1
             if not i == j:
                 if close(i,j):
-                    # found one pair that can be added
+                    # found one pair that can be merged
                     file1=h5py.File(filelist[i])
                     file2=h5py.File(filelist[j])
                     len1 = file1["RunSummary/Counts"].len()
