@@ -192,7 +192,6 @@ def group():
                     for k in range(len(prmtr_names)):
                         prmtr_values[k][i] = float(np.mean(file1[prmtr_names[k]]))
                         del prmtr_values[k][j]
-                    new_length = len(filelist)
                     # we modified list we were iterating over, break loop
                     break
         new_length = len(filelist)
