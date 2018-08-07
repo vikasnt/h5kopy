@@ -22,36 +22,28 @@ class data:
 def dataset_copy(item, item_len, new, new_len):
     """Fuction to copy dataset from item into new."""
     # dataset exists, resize and modify
-
     if item.name in new:
-
         # Case 1: 1 data point dataset for mean values
         if len(item.shape) == 1 and item.len() == 1:
             # need to take weighted average here
             new[item.name][0] = (new[item.name][0]*new_len +
                                  item.value*item_len)/(new_len+item_len)
-
         # Case 2: 1d /2d array
         else:
             x_len = new[item.name].len()+item.len()
             new[item.name].resize(x_len, axis=0)
             new[item.name][-item.shape[0]:] = item.value
-
     # dataset doesn't exist, create dataset and modify
-    # this might never be needed if we only update existing files
     else:
-
         # Case 1: 1 data point dataset like T2FractionMean
         if len(item.shape) == 1 and item.len() == 1:
             new.create_dataset(item.name, item.shape, item.dtype)
             new[item.name][0] = item.value
-
         # Case 2: 1d array
         if len(item.shape) == 1 and item.len() != 1:
             new.create_dataset(item.name, item.shape, item.dtype,
-                               chunks=True, maxshape=(500,))
+                               chunks=True, maxshape=(None,))
             new[item.name][-item.shape[0]:] = item.value
-
         # Case 3: 2d array
         if len(item.shape) == 2:
             new.create_dataset(item.name, item.shape, item.dtype,
@@ -61,54 +53,42 @@ def dataset_copy(item, item_len, new, new_len):
 
 def attr_copy(item, new):
     """Fuction to copy attribute from input files into output file."""
-    for name in item.attrs:
-
-        # attr exists in output file, modify attr data
-        if name in new[item.name].attrs:
-
-            # different treatment for attributes of dataset like T2FractionMean
-            # TODO: because of this line, code wont work with attrs of groups
-            if len(item.shape) == 1 and item.len() == 1:
-                # Error attribute for mean values added as sqrt(x^2+y^2)
-                # Unit attribute is not appended
-                if name == 'Error':
-                    attr_data = np.add(new[item.name].attrs.get(name)**(2),
-                                       item.attrs.get(name)**(2))**(1/2)
-                    new[item.name].attrs.__setitem__(name, attr_data)
-            else:
-                attr_data = np.append(new[item.name].attrs.get(name),
-                                      item.attrs.get(name))
-                new[item.name].attrs.__setitem__(name, attr_data)
-
-        # create new.attr and add data
-        else:
-            if len(item.shape) == 1 and item.len() == 1:
-                # Error attribute for mean values
-                if name == 'Error':
-                    new[item.name].attrs.__setitem__(name,
-                                                     item.attrs.get(name))
+    # As of now, only one group attribute exists, FileCount
+    # We are managing it in move() method explicitly.
+    # So we don't touch group attribute here
+    if isinstance(item, h5py.Dataset):
+        for name in item.attrs:
+            # attr exists in output file, modify attr data
+            if name in new[item.name].attrs:
+                if len(item.shape) == 1 and item.len() == 1:
+                    # this is true for two attributes
+                    # 1) Error attribute for mean values added as sqrt(x^2+y^2)
+                    # 2) Unit attribute, which is not appended
+                    if name == 'Error':
+                        attr_data = np.add(new[item.name].attrs.get(name)**(2),
+                                           item.attrs.get(name)**(2))**(1/2)
+                        new[item.name].attrs.__setitem__(name, attr_data)
                 else:
-                    new[item.name].attrs.__setitem__(name,
-                                                     item.attrs.get(name))
+                    attr_data = np.append(new[item.name].attrs.get(name),
+                                          item.attrs.get(name))
+                    new[item.name].attrs.__setitem__(name, attr_data)
+            # create new.attr and add data
             else:
                 new[item.name].attrs.__setitem__(name, item.attrs.get(name))
 
 
-# item =file to be merged, new = final file
+# item =file to be copied, new = file to be appended
 # pass len argument as 0 when new is an empty file
 def copy(item, item_len, new, new_len):
     """Fuction to copy input file data into output file."""
     # if item is group
     if isinstance(item, h5py.Group):
         new.require_group(item.name)
-
     # if item is dataset
     if isinstance(item, h5py.Dataset):
         dataset_copy(item, item_len, new, new_len)
-
     # copy item attribute(s)
     attr_copy(item, new)
-
     # continue towards sub-groups/datasets, if item is group
     if isinstance(item, h5py.Group):
         for name in item:
@@ -123,7 +103,6 @@ def show(new):
     if isinstance(new, h5py.Group):
         for name in new:
             show(new[name])
-
     if isinstance(new, h5py.Dataset):
         if len(new.shape) == 1 and new.len() == 1:
             logging.info(new.name)
@@ -149,7 +128,6 @@ def init():
         show(first_file)
         print("\n")
         first_file.close()
-
         # read input from input.config
         config = configparser.ConfigParser()
         config.read('input.cfg')
@@ -174,13 +152,18 @@ def move(file1, file2, new_count):
     """Code to execute how files are copied when in merge range"""
     len1 = file1["RunSummary/Counts"].len()
     len2 = file2["RunSummary/Counts"].len()
-
     # file1 is an output file
     if 'Filecount' in file1.attrs:
         copy(file2, len2, file1, len1)
-        file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+1)
+        # file2 is also an output file
+        if 'Filecount' in file2.attrs:
+            file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+
+                                    file2.attrs.get('Filecount'))
+        # files2 is input file
+        else:
+            file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+1)
         data.filelist.remove(file2.filename)
-    # file2 is an output file
+    # file1 is input file, file2 is an output file
     elif 'Filecount' in file2.attrs:
         copy(file1, len1, file2, len2)
         file2.attrs.__setitem__('Filecount', file2.attrs.get('Filecount')+1)
@@ -220,7 +203,6 @@ def group():
                 file1.close()
                 file2.close()
         new_length = len(data.filelist)
-
     # at this point we might have some files which aren't merged with any other file
     # copy them into new output file, one for each for completeness
     for filename in data.filelist:
@@ -257,10 +239,8 @@ if __name__ == "__main__":
                              data.prmtr_names[counter], data.spr[counter])
                 counter += 1
             print("\n")
-
             # group files based on input
             group()
-
         else:
             logging.error("No parameter found in input.cfg, "
                           "will not merge any file")
