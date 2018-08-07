@@ -5,6 +5,7 @@ them to produce one output file,based on user input condition(s)
 for the KATRIN experiment data.
 """
 
+import os
 import fnmatch
 import logging
 import configparser
@@ -149,7 +150,7 @@ def close(file1, file2):
 
 
 def move(file1, file2, new_count):
-    """Code to execute how files are copied when in merge range"""
+    """Code to decide how files are copied when in merge range"""
     len1 = file1["RunSummary/Counts"].len()
     len2 = file2["RunSummary/Counts"].len()
     # file1 is an output file
@@ -159,6 +160,9 @@ def move(file1, file2, new_count):
         if 'Filecount' in file2.attrs:
             file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+
                                     file2.attrs.get('Filecount'))
+            # since we are adding an output file to another 
+            # need to delete the file which is copied
+            os.remove(file2.filename)
         # files2 is input file
         else:
             file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+1)
