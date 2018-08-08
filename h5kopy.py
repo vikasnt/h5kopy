@@ -14,7 +14,8 @@ from itertools import product
 import h5py
 import numpy as np
 
-class data:
+class Data:
+    """ class to hold lists required by multiple method"""
     prmtr_names = []
     spr = []
     filelist = []
@@ -119,12 +120,12 @@ def init():
     total_prmtr = 0
     for filename in glob.glob('*.h5'):
         if not fnmatch.fnmatch(filename, 'out*'):
-            data.filelist.append(filename)
+            Data.filelist.append(filename)
     # if no .h5 files found, pass -ve value to main code
-    if not data.filelist:
+    if not Data.filelist:
         total_prmtr = -1
     else:
-        first_file = h5py.File(data.filelist[0], "r")
+        first_file = h5py.File(Data.filelist[0], "r")
         logging.info("Available datasets of mean values in input :")
         show(first_file)
         print("\n")
@@ -133,18 +134,18 @@ def init():
         config = configparser.ConfigParser()
         config.read('input.cfg')
         for sections in config.sections():
-            data.prmtr_names.append(config.get(sections, 'name'))
-            data.spr.append(config.getfloat(sections, 'spread'))
+            Data.prmtr_names.append(config.get(sections, 'name'))
+            Data.spr.append(config.getfloat(sections, 'spread'))
             total_prmtr += 1
     return total_prmtr
 
 
 def close(file1, file2):
     """Check if input files are close enough for merge."""
-    for k, prmtr in enumerate(data.prmtr_names):
+    for k, prmtr in enumerate(Data.prmtr_names):
         val1 = float(np.mean(file1[prmtr]))
         val2 = float(np.mean(file2[prmtr]))
-        if not abs(val1-val2) < max(val1*data.spr[k], val2*data.spr[k]):
+        if not abs(val1-val2) < max(val1*Data.spr[k], val2*Data.spr[k]):
             return False
     return True
 
@@ -153,36 +154,45 @@ def move(file1, file2, new_count):
     """Code to decide how files are copied when in merge range"""
     len1 = file1["RunSummary/Counts"].len()
     len2 = file2["RunSummary/Counts"].len()
-    # file1 is an output file
+    # file1 is an output file ( only output file contains FileCount)
     if 'Filecount' in file1.attrs:
         copy(file2, len2, file1, len1)
         # file2 is also an output file
         if 'Filecount' in file2.attrs:
             file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+
                                     file2.attrs.get('Filecount'))
-            # since we are adding an output file to another 
+            input_names = np.append(file1.attrs.get('Inputfiles'),
+                                    file2.attrs.get('Inputfiles'))
+            file1.attrs.__setitem__('Inputfiles', input_names)
+            # since we are adding an output file to another
             # need to delete the file which is copied
             os.remove(file2.filename)
         # files2 is input file
         else:
             file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+1)
-        data.filelist.remove(file2.filename)
+            input_names = np.append(file1.attrs.get('Inputfiles'), file2.filename)
+            file1.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
+        Data.filelist.remove(file2.filename)
     # file1 is input file, file2 is an output file
     elif 'Filecount' in file2.attrs:
         copy(file1, len1, file2, len2)
         file2.attrs.__setitem__('Filecount', file2.attrs.get('Filecount')+1)
-        data.filelist.remove(file1.filename)
+        input_names = np.append(file2.attrs.get('Inputfiles'), file1.filename)
+        file2.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
+        Data.filelist.remove(file1.filename)
     # both are input files
     else:
         new_name = 'out'+str(new_count)+'.h5'
         # output files will be overwritten if exists
-        newfile = h5py.File(new_name,'w')
+        newfile = h5py.File(new_name, 'w')
         newfile.attrs.create('Filecount', 2, (1,), 'int64')
+        input_names = np.append(file2.filename, file1.filename)
+        newfile.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
         new_count += 1
         copy(file1, len1, newfile, 0)
         copy(file2, len2, newfile, newfile["RunSummary/Counts"].len())
-        data.filelist[data.filelist.index(file1.filename)] = new_name
-        data.filelist.remove(file2.filename)
+        Data.filelist[Data.filelist.index(file1.filename)] = new_name
+        Data.filelist.remove(file2.filename)
         newfile.close()
     return new_count
 
@@ -192,11 +202,11 @@ def group():
     # try to add files using bottoms up
     # keep trying until no more merge can happen
     new_count = 1
-    old_length = len(data.filelist)
+    old_length = len(Data.filelist)
     new_length = old_length - 1
     while new_length < old_length:
-        old_length = len(data.filelist)
-        for filename1, filename2 in product(data.filelist, data.filelist):
+        old_length = len(Data.filelist)
+        for filename1, filename2 in product(Data.filelist, Data.filelist):
             if not filename1 == filename2:
                 file1 = h5py.File(filename1)
                 file2 = h5py.File(filename2)
@@ -206,22 +216,23 @@ def group():
                     break
                 file1.close()
                 file2.close()
-        new_length = len(data.filelist)
+        new_length = len(Data.filelist)
     # at this point we might have some files which aren't merged with any other file
     # copy them into new output file, one for each for completeness
-    for filename in data.filelist:
+    for filename in Data.filelist:
         if not fnmatch.fnmatch(filename, 'out*'):
             file1 = h5py.File(filename)
             len1 = file1["RunSummary/Counts"].len()
             new_name = 'out'+str(new_count)+'.h5'
-            newfile = h5py.File(new_name,'w')
+            newfile = h5py.File(new_name, 'w')
             new_count += 1
             newfile.attrs.create('Filecount', 1, (1,), 'int64')
+            newfile.attrs.__setitem__('Inputfiles', file1.filename.encode('utf8'))
             copy(file1, len1, newfile, 0)
             file1.close()
             newfile.close()
-            data.filelist[data.filelist.index(filename)] = new_name
-    print("final output files", data.filelist)
+            Data.filelist[Data.filelist.index(filename)] = new_name
+    print("final output files", Data.filelist)
 
 
 # set logger level ( if needed diff from default )
@@ -240,7 +251,7 @@ if __name__ == "__main__":
             logging.info("Parameters found in input.cfg :")
             while counter < num:
                 logging.info("Parameter %s Spread %s",
-                             data.prmtr_names[counter], data.spr[counter])
+                             Data.prmtr_names[counter], Data.spr[counter])
                 counter += 1
             print("\n")
             # group files based on input
