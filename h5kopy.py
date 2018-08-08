@@ -163,7 +163,7 @@ def move(file1, file2, new_count):
                                     file2.attrs.get('Filecount'))
             input_names = np.append(file1.attrs.get('Inputfiles'),
                                     file2.attrs.get('Inputfiles'))
-            file1.attrs.__setitem__('Inputfiles', input_names)
+            file1.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
             # since we are adding an output file to another
             # need to delete the file which is copied
             os.remove(file2.filename)
