@@ -232,8 +232,16 @@ def group():
             file1.close()
             newfile.close()
             Data.filelist[Data.filelist.index(filename)] = new_name
-    print("final output files", Data.filelist)
-
+    # print some details
+    # we need to use astype and decode, because hdf5 doesn't work with unicode
+    # so we had to change it to bytecode when saving Inputfiles
+    print('output files')
+    for name in Data.filelist:
+        file = h5py.File(name)
+        if file.attrs.get('Filecount') > 1:
+            print(name, 'contains', file.attrs.get('Inputfiles').astype('str'))
+        if file.attrs.get('Filecount') == 1:
+            print(name, 'contains', file.attrs.get('Inputfiles').decode('utf8'))
 
 # set logger level ( if needed diff from default )
 logging.basicConfig(level=logging.INFO)
