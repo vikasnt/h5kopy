@@ -163,22 +163,22 @@ def move(file1, file2, new_count):
                                     file2.attrs.get('Filecount'))
             input_names = np.append(file1.attrs.get('Inputfiles'),
                                     file2.attrs.get('Inputfiles'))
-            file1.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
+            file1.attrs.__setitem__('Inputfiles', input_names)
             # since we are adding an output file to another
             # need to delete the file which is copied
             os.remove(file2.filename)
         # files2 is input file
         else:
             file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+1)
-            input_names = np.append(file1.attrs.get('Inputfiles'), file2.filename)
-            file1.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
+            input_names = np.append(file1.attrs.get('Inputfiles'), file2.filename.encode('utf8'))
+            file1.attrs.__setitem__('Inputfiles', input_names)
         Data.filelist.remove(file2.filename)
     # file1 is input file, file2 is an output file
     elif 'Filecount' in file2.attrs:
         copy(file1, len1, file2, len2)
         file2.attrs.__setitem__('Filecount', file2.attrs.get('Filecount')+1)
-        input_names = np.append(file2.attrs.get('Inputfiles'), file1.filename)
-        file2.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
+        input_names = np.append(file2.attrs.get('Inputfiles'), file1.filename.encode('utf8'))
+        file2.attrs.__setitem__('Inputfiles', input_names)
         Data.filelist.remove(file1.filename)
     # both are input files
     else:
@@ -186,8 +186,8 @@ def move(file1, file2, new_count):
         # output files will be overwritten if exists
         newfile = h5py.File(new_name, 'w')
         newfile.attrs.create('Filecount', 2, (1,), 'int64')
-        input_names = np.append(file2.filename, file1.filename)
-        newfile.attrs.__setitem__('Inputfiles', [a.encode('utf8') for a in input_names])
+        input_names = np.append(file2.filename.encode('utf8'), file1.filename.encode('utf8'))
+        newfile.attrs.__setitem__('Inputfiles', input_names)
         new_count += 1
         copy(file1, len1, newfile, 0)
         copy(file2, len2, newfile, newfile["RunSummary/Counts"].len())
