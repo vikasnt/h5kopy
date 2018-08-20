@@ -9,7 +9,7 @@ import os
 import fnmatch
 import logging
 import configparser
-import glob
+import argparse
 from itertools import product
 import h5py
 import numpy as np
@@ -113,26 +113,29 @@ def show(new):
 def init():
     """Fuction to take input.
 
-    To read one input file, print available datasets
-    for comparison and to read input.cfg
+    To read input file list and configuration file,
+    and print available mean datasets 
     """
-    # print name of available parameters:
+
+    parser = argparse.ArgumentParser(description='Argument parser')
+    parser.add_argument('-c', '--configuration', default='input.cfg', help = 'configfile containing merge parameters')
+    parser.add_argument('input', nargs='*', help='input files list')
+    args = parser.parse_args()
+    Data.filelist = args.input
     total_prmtr = 0
-    for filename in glob.glob('*.h5'):
-        if not fnmatch.fnmatch(filename, 'out*'):
-            Data.filelist.append(filename)
     # if no .h5 files found, pass -ve value to main code
     if not Data.filelist:
         total_prmtr = -1
     else:
-        first_file = h5py.File(Data.filelist[0], "r")
+         # print name of available parameters:
+        first_file = h5py.File(str(Data.filelist[0]), "r")
         logging.info("Available datasets of mean values in input :")
         show(first_file)
         print("\n")
         first_file.close()
         # read input from input.config
         config = configparser.ConfigParser()
-        config.read('input.cfg')
+        config.read(args.configuration)
         for sections in config.sections():
             Data.prmtr_names.append(config.get(sections, 'name'))
             Data.spr.append(config.getfloat(sections, 'spread'))
@@ -182,7 +185,7 @@ def move(file1, file2, new_count):
         Data.filelist.remove(file1.filename)
     # both are input files
     else:
-        new_name = 'out'+str(new_count)+'.h5'
+        new_name = 'out'+file1.filename[:-3]+'.h5'
         # output files will be overwritten if exists
         newfile = h5py.File(new_name, 'w')
         newfile.attrs.create('Filecount', 2, (1,), 'int64')
@@ -220,18 +223,18 @@ def group():
     # at this point we might have some files which aren't merged with any other file
     # copy them into new output file, one for each for completeness
     for filename in Data.filelist:
-        if not fnmatch.fnmatch(filename, 'out*'):
-            file1 = h5py.File(filename)
+        file1 = h5py.File(filename)
+        if not 'Filecount' in file1.attrs:
             len1 = file1["RunSummary/Counts"].len()
-            new_name = 'out'+str(new_count)+'.h5'
+            new_name = 'out'+filename[:-3]+'.h5'
             newfile = h5py.File(new_name, 'w')
             new_count += 1
             newfile.attrs.create('Filecount', 1, (1,), 'int64')
             newfile.attrs.__setitem__('Inputfiles', file1.filename.encode('utf8'))
             copy(file1, len1, newfile, 0)
-            file1.close()
             newfile.close()
             Data.filelist[Data.filelist.index(filename)] = new_name
+        file1.close()
     # print some details
     # we need to use astype and decode, because hdf5 doesn't work with unicode
     # so we had to change it to bytecode when saving Inputfiles
