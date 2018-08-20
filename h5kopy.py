@@ -8,6 +8,7 @@ for the KATRIN experiment data.
 import os
 import fnmatch
 import logging
+from datetime import datetime
 import configparser
 import argparse
 from itertools import product
@@ -15,10 +16,12 @@ import h5py
 import numpy as np
 
 class Data:
-    """ class to hold lists required by multiple method"""
+    """ class to hold data required by multiple methods"""
     prmtr_names = []
     spr = []
     filelist = []
+    outpath = None
+
 
 
 def dataset_copy(item, item_len, new, new_len):
@@ -110,39 +113,6 @@ def show(new):
             logging.info(new.name)
 
 
-def init():
-    """Fuction to take input.
-
-    To read input file list and configuration file,
-    and print available mean datasets 
-    """
-
-    parser = argparse.ArgumentParser(description='Argument parser')
-    parser.add_argument('-c', '--configuration', default='input.cfg', help = 'configfile containing merge parameters')
-    parser.add_argument('input', nargs='*', help='input files list')
-    args = parser.parse_args()
-    Data.filelist = args.input
-    total_prmtr = 0
-    # if no .h5 files found, pass -ve value to main code
-    if not Data.filelist:
-        total_prmtr = -1
-    else:
-         # print name of available parameters:
-        first_file = h5py.File(str(Data.filelist[0]), "r")
-        logging.info("Available datasets of mean values in input :")
-        show(first_file)
-        print("\n")
-        first_file.close()
-        # read input from input.config
-        config = configparser.ConfigParser()
-        config.read(args.configuration)
-        for sections in config.sections():
-            Data.prmtr_names.append(config.get(sections, 'name'))
-            Data.spr.append(config.getfloat(sections, 'spread'))
-            total_prmtr += 1
-    return total_prmtr
-
-
 def close(file1, file2):
     """Check if input files are close enough for merge."""
     for k, prmtr in enumerate(Data.prmtr_names):
@@ -185,7 +155,7 @@ def move(file1, file2, new_count):
         Data.filelist.remove(file1.filename)
     # both are input files
     else:
-        new_name = 'out'+file1.filename[:-3]+'.h5'
+        new_name = Data.outpath+'/out'+file1.filename[:-3]+'.h5'
         # output files will be overwritten if exists
         newfile = h5py.File(new_name, 'w')
         newfile.attrs.create('Filecount', 2, (1,), 'int64')
@@ -204,6 +174,8 @@ def group():
     """Group files based on input."""
     # try to add files using bottoms up
     # keep trying until no more merge can happen
+    if not os.path.exists(Data.outpath):
+        os.makedirs(Data.outpath)
     new_count = 1
     old_length = len(Data.filelist)
     new_length = old_length - 1
@@ -226,7 +198,7 @@ def group():
         file1 = h5py.File(filename)
         if not 'Filecount' in file1.attrs:
             len1 = file1["RunSummary/Counts"].len()
-            new_name = 'out'+filename[:-3]+'.h5'
+            new_name = Data.outpath+'/out'+filename[:-3]+'.h5'
             newfile = h5py.File(new_name, 'w')
             new_count += 1
             newfile.attrs.create('Filecount', 1, (1,), 'int64')
@@ -245,6 +217,42 @@ def group():
             print(name, 'contains', file.attrs.get('Inputfiles').astype('str'))
         if file.attrs.get('Filecount') == 1:
             print(name, 'contains', file.attrs.get('Inputfiles').decode('utf8'))
+
+
+def init():
+    """Fuction to take input.
+
+    To read input file list and configuration file,
+    and print available mean datasets 
+    """
+
+    parser = argparse.ArgumentParser(description='Argument parser')
+    parser.add_argument('-c', '--configuration', default='input.cfg', help = 'configfile containing merge parameters')
+    parser.add_argument('-o', '--outpath', default=datetime.now().strftime('%H:%M:%S,%d-%m-%y'), help = 'path for output files')
+    parser.add_argument('input', nargs='*', help='input files list')
+    args = parser.parse_args()
+    Data.filelist = args.input
+    Data.outpath = args.outpath
+    total_prmtr = 0
+    # if no .h5 files found, pass -ve value to main code
+    if not Data.filelist:
+        total_prmtr = -1
+    else:
+         # print name of available parameters:
+        first_file = h5py.File(str(Data.filelist[0]), "r")
+        logging.info("Available datasets of mean values in input :")
+        show(first_file)
+        print("\n")
+        first_file.close()
+        # read input from input.config
+        config = configparser.ConfigParser()
+        config.read(args.configuration)
+        for sections in config.sections():
+            Data.prmtr_names.append(config.get(sections, 'name'))
+            Data.spr.append(config.getfloat(sections, 'spread'))
+            total_prmtr += 1
+    return total_prmtr
+
 
 # set logger level ( if needed diff from default )
 logging.basicConfig(level=logging.INFO)
