@@ -58,9 +58,8 @@ def dataset_copy(item, item_len, new, new_len):
 
 def attr_copy(item, new):
     """Fuction to copy attribute from input files into output file."""
-    # As of now, only one group attribute exists, FileCount
-    # We are managing it in move() method explicitly.
-    # So we don't touch group attribute here
+    # As of now, group attribute are not touched here
+    # We are managing them in the move() method explicitly.
     if isinstance(item, h5py.Dataset):
         for name in item.attrs:
             # attr exists in output file, modify attr data
@@ -123,11 +122,11 @@ def close(file1, file2):
     return True
 
 
-def move(file1, file2, new_count):
+def move(file1, file2):
     """Code to decide how files are copied when in merge range"""
     len1 = file1["RunSummary/Counts"].len()
     len2 = file2["RunSummary/Counts"].len()
-    # file1 is an output file ( only output file contains FileCount)
+    # file1 is an output file ( only output file contains Filecount)
     if 'Filecount' in file1.attrs:
         copy(file2, len2, file1, len1)
         # file2 is also an output file
@@ -156,18 +155,15 @@ def move(file1, file2, new_count):
     # both are input files
     else:
         new_name = Data.outpath+'/out'+file1.filename[:-3]+'.h5'
-        # output files will be overwritten if exists
         newfile = h5py.File(new_name, 'w')
         newfile.attrs.create('Filecount', 2, (1,), 'int64')
         input_names = np.append(file2.filename.encode('utf8'), file1.filename.encode('utf8'))
         newfile.attrs.__setitem__('Inputfiles', input_names)
-        new_count += 1
         copy(file1, len1, newfile, 0)
         copy(file2, len2, newfile, newfile["RunSummary/Counts"].len())
         Data.filelist[Data.filelist.index(file1.filename)] = new_name
         Data.filelist.remove(file2.filename)
         newfile.close()
-    return new_count
 
 
 def group():
@@ -176,7 +172,6 @@ def group():
     # keep trying until no more merge can happen
     if not os.path.exists(Data.outpath):
         os.makedirs(Data.outpath)
-    new_count = 1
     old_length = len(Data.filelist)
     new_length = old_length - 1
     while new_length < old_length:
@@ -186,7 +181,7 @@ def group():
                 file1 = h5py.File(filename1)
                 file2 = h5py.File(filename2)
                 if close(file1, file2):
-                    new_count = move(file1, file2, new_count)
+                    move(file1, file2)
                     # we modified list we were iterating over, break loop
                     break
                 file1.close()
@@ -196,11 +191,14 @@ def group():
     # copy them into new output file, one for each for completeness
     for filename in Data.filelist:
         file1 = h5py.File(filename)
-        if not 'Filecount' in file1.attrs:
+        if 'Filecount' in file1.attrs:
+            new_name=filename[:-3]+'_'+str(file1.attrs.get('Filecount'))+'.h5'
+            os.rename(filename,new_name)
+            Data.filelist[Data.filelist.index(filename)] = new_name
+        else:
             len1 = file1["RunSummary/Counts"].len()
             new_name = Data.outpath+'/out'+filename[:-3]+'.h5'
             newfile = h5py.File(new_name, 'w')
-            new_count += 1
             newfile.attrs.create('Filecount', 1, (1,), 'int64')
             newfile.attrs.__setitem__('Inputfiles', file1.filename.encode('utf8'))
             copy(file1, len1, newfile, 0)
