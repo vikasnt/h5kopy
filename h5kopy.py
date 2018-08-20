@@ -187,17 +187,18 @@ def group():
                 file1.close()
                 file2.close()
         new_length = len(Data.filelist)
+    # 1) rename all files to show how many files got merged in them
     # at this point we might have some files which aren't merged with any other file
     # copy them into new output file, one for each for completeness
     for filename in Data.filelist:
         file1 = h5py.File(filename)
         if 'Filecount' in file1.attrs:
-            new_name=filename[:-3]+'_'+str(file1.attrs.get('Filecount'))+'.h5'
+            new_name=filename[:-3]+'_'+str(int(file1.attrs.get('Filecount')))+'.h5'
             os.rename(filename,new_name)
             Data.filelist[Data.filelist.index(filename)] = new_name
         else:
             len1 = file1["RunSummary/Counts"].len()
-            new_name = Data.outpath+'/out'+filename[:-3]+'.h5'
+            new_name = Data.outpath+'/out'+filename[:-3]+'_1.h5'
             newfile = h5py.File(new_name, 'w')
             newfile.attrs.create('Filecount', 1, (1,), 'int64')
             newfile.attrs.__setitem__('Inputfiles', file1.filename.encode('utf8'))
