@@ -213,13 +213,15 @@ def group():
     # print some details
     # we need to use astype and decode, because hdf5 doesn't work with unicode
     # so we had to change it to bytecode when saving Inputfiles
+    logging.info('Output files path: %s', os.path.abspath(Data.outpath))
     logging.info('Number of output files created: %d', len(Data.filelist))
     for name in Data.filelist:
         file = h5py.File(name)
+        name1,name2 = os.path.split(name)
         if file.attrs.get('Filecount') > 1:
-            print(name, 'contains', file.attrs.get('Inputfiles').astype('str'))
+            print(name2, 'contains', file.attrs.get('Inputfiles').astype('str'))
         if file.attrs.get('Filecount') == 1:
-            print(name, 'contains', file.attrs.get('Inputfiles').decode('utf8'))
+            print(name2, 'contains', file.attrs.get('Inputfiles').decode('utf8'))
 
 
 def init():
