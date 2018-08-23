@@ -6,7 +6,6 @@ for the KATRIN experiment data.
 """
 
 import os
-import fnmatch
 import logging
 from datetime import datetime
 import configparser
@@ -15,13 +14,14 @@ from itertools import product
 import h5py
 import numpy as np
 
+
 class Data:
-    """ class to hold data required by multiple methods"""
+    """Class to hold data required by multiple methods."""
+
     prmtr_names = []
     spr = []
     filelist = []
     outpath = None
-
 
 
 def dataset_copy(item, item_len, new, new_len):
@@ -123,7 +123,7 @@ def close(file1, file2):
 
 
 def move(file1, file2):
-    """Code to decide how files are copied when in merge range"""
+    """Code to decide how files are copied when in merge range."""
     len1 = file1["RunSummary/Counts"].len()
     len2 = file2["RunSummary/Counts"].len()
     # file1 is an output file ( only output file contains Filecount)
@@ -131,7 +131,7 @@ def move(file1, file2):
         copy(file2, len2, file1, len1)
         # file2 is also an output file
         if 'Filecount' in file2.attrs:
-            file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+
+            file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount') +
                                     file2.attrs.get('Filecount'))
             input_names = np.append(file1.attrs.get('Inputfiles'),
                                     file2.attrs.get('Inputfiles'))
@@ -141,15 +141,18 @@ def move(file1, file2):
             os.remove(file2.filename)
         # files2 is input file
         else:
-            file1.attrs.__setitem__('Filecount', file1.attrs.get('Filecount')+1)
-            input_names = np.append(file1.attrs.get('Inputfiles'), file2.filename.encode('utf8'))
+            file1.attrs.__setitem__('Filecount',
+                                    file1.attrs.get('Filecount')+1)
+            input_names = np.append(file1.attrs.get('Inputfiles'),
+                                    file2.filename.encode('utf8'))
             file1.attrs.__setitem__('Inputfiles', input_names)
         Data.filelist.remove(file2.filename)
     # file1 is input file, file2 is an output file
     elif 'Filecount' in file2.attrs:
         copy(file1, len1, file2, len2)
         file2.attrs.__setitem__('Filecount', file2.attrs.get('Filecount')+1)
-        input_names = np.append(file2.attrs.get('Inputfiles'), file1.filename.encode('utf8'))
+        input_names = np.append(file2.attrs.get('Inputfiles'),
+                                file1.filename.encode('utf8'))
         file2.attrs.__setitem__('Inputfiles', input_names)
         Data.filelist.remove(file1.filename)
     # both are input files
@@ -157,7 +160,8 @@ def move(file1, file2):
         new_name = Data.outpath+'/out'+file1.filename[:-3]+'.h5'
         newfile = h5py.File(new_name, 'w')
         newfile.attrs.create('Filecount', 2, (1,), 'int64')
-        input_names = np.append(file2.filename.encode('utf8'), file1.filename.encode('utf8'))
+        input_names = np.append(file2.filename.encode('utf8'),
+                                file1.filename.encode('utf8'))
         newfile.attrs.__setitem__('Inputfiles', input_names)
         copy(file1, len1, newfile, 0)
         copy(file2, len2, newfile, newfile["RunSummary/Counts"].len())
@@ -188,13 +192,13 @@ def group():
                 file2.close()
         new_length = len(Data.filelist)
     # 1) rename all files to show how many files got merged in them
-    # at this point we might have some files which aren't merged with any other file
-    # copy them into new output file, one for each for completeness
+    # 2) at this point we might have some files which aren't merged with any
+    # other file,copy them into new output file, one for each for completeness
     for filename in Data.filelist:
         file1 = h5py.File(filename)
         if 'Filecount' in file1.attrs:
-            new_name=filename[:-3]+'_'+str(int(file1.attrs.get('Filecount')))+'.h5'
-            os.rename(filename,new_name)
+            new_name = filename[:-3]+'_'+str(int(file1.attrs.get('Filecount')))+'.h5'
+            os.rename(filename, new_name)
             Data.filelist[Data.filelist.index(filename)] = new_name
         else:
             len1 = file1["RunSummary/Counts"].len()
@@ -209,7 +213,7 @@ def group():
     # print some details
     # we need to use astype and decode, because hdf5 doesn't work with unicode
     # so we had to change it to bytecode when saving Inputfiles
-    print('output files')
+    logging.info('Number of output files created: %d', len(Data.filelist))
     for name in Data.filelist:
         file = h5py.File(name)
         if file.attrs.get('Filecount') > 1:
@@ -222,12 +226,13 @@ def init():
     """Fuction to take input.
 
     To read input file list and configuration file,
-    and print available mean datasets 
+    and print available mean datasets
     """
-
     parser = argparse.ArgumentParser(description='Argument parser')
-    parser.add_argument('-c', '--configuration', default='input.cfg', help = 'configfile containing merge parameters')
-    parser.add_argument('-o', '--outpath', default=datetime.now().strftime('%H:%M:%S,%d-%m-%y'), help = 'path for output files')
+    parser.add_argument('-c', '--configuration', default='input.cfg',
+                        help='configfile containing merge parameters')
+    parser.add_argument('-o', '--outpath', default=datetime.now().strftime('%H:%M:%S,%d-%m-%y'),
+                        help='path for output files')
     parser.add_argument('input', nargs='*', help='input files list')
     args = parser.parse_args()
     Data.filelist = args.input
@@ -237,7 +242,7 @@ def init():
     if not Data.filelist:
         total_prmtr = -1
     else:
-         # print name of available parameters:
+        # print name of available parameters:
         first_file = h5py.File(str(Data.filelist[0]), "r")
         logging.info("Available datasets of mean values in input :")
         show(first_file)
@@ -273,6 +278,7 @@ if __name__ == "__main__":
                 counter += 1
             print("\n")
             # group files based on input
+            logging.info("Number of input files found: %d", len(Data.filelist))
             group()
         else:
             logging.error("No parameter found in input.cfg, "
